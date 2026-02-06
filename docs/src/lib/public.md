@@ -24,6 +24,7 @@ nickel_to_yaml
 check_ffi_available
 nickel_eval_ffi
 nickel_eval_native
+nickel_eval_file_native
 ```
 
 ## String Macro

@@ -79,6 +79,46 @@ cargo test
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
+## Release Process
+
+**Before tagging a new version, ALL CI workflows must pass:**
+
+1. Run tests locally: `julia --project=. -e 'using Pkg; Pkg.test()'`
+2. Push changes to main
+3. Wait for CI to complete and verify all workflows pass (both CI and Documentation)
+4. Only then tag and register the new version
+
+```bash
+# Check CI status before tagging
+gh run list --repo LouLouLibs/NickelEval --limit 5
+
+# All workflows should show "success" before proceeding with:
+git tag -a vX.Y.Z -m "vX.Y.Z: Description"
+git push origin vX.Y.Z
+```
+
+### Version Bumping Checklist
+
+1. Update `version` in `Project.toml`
+2. Update `## Current Version` in `TODO.md`
+3. Commit these changes
+4. Wait for CI to pass
+5. Tag the release
+6. Update loulouJL registry with correct tree SHA
+
+### Documentation Requirements
+
+Any new exported function must be added to `docs/src/lib/public.md` in the appropriate section to avoid documentation build failures.
+
+### Registry (loulouJL)
+
+Location: `/Users/loulou/Dropbox/projects_code/julia_packages/loulouJL/N/NickelEval/`
+
+After tagging, update `Versions.toml` with:
+```bash
+git rev-parse vX.Y.Z^{tree}  # Get tree SHA
+```
+
 ## Binary Protocol Specification
 
 The FFI uses a binary protocol for native type encoding:
