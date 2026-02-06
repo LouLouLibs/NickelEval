@@ -1,106 +1,131 @@
 # NickelEval.jl - Next Session TODOs
 
-## Current State (v0.2.0)
+## Goal
 
-**Working:**
-- Subprocess-based Nickel evaluation (`nickel_eval`, `nickel_eval_file`)
-- Typed evaluation to Julia native types (Dict, NamedTuple, Vector, structs)
-- Export functions (JSON, TOML, YAML)
-- String macro (`ncl"..."`)
-- Documentation site with VitePress at https://louloulibs.github.io/NickelEval/dev/
-- CI passing with 53 tests
+**Parse Nickel directly into Julia native types** via FFI binary protocol.
 
-**Infrastructure Ready but Not Integrated:**
-- Rust FFI library (`rust/nickel-jl/`) - complete with 33 tests
-- Binary protocol for native type encoding (preserves Int64 vs Float64)
-- Julia FFI bindings skeleton (`src/ffi.jl`)
+The Rust FFI encodes Nickel values with type tags:
+- `TYPE_INT (2)` → `Int64`
+- `TYPE_FLOAT (3)` → `Float64`
+- `TYPE_STRING (4)` → `String`
+- `TYPE_BOOL (1)` → `Bool`
+- `TYPE_NULL (0)` → `nothing`
+- `TYPE_ARRAY (5)` → `Vector`
+- `TYPE_RECORD (6)` → `Dict{String, Any}` or `NamedTuple`
+
+This preserves Nickel's type semantics directly—no JSON round-trip.
 
 ---
 
-## Priority 1: Complete FFI Integration
+## Current State
 
-### 1.1 Build and Test Rust Library Locally
-```bash
-cd rust/nickel-jl
-cargo build --release
-cp target/release/libnickel_jl.dylib ../../deps/  # macOS
-# or libnickel_jl.so for Linux
-```
+**Done:**
+- Rust FFI library (`rust/nickel-jl/src/lib.rs`) - encodes to binary protocol
+- 33 Rust tests passing
+- Julia FFI skeleton (`src/ffi.jl`) - calls Rust, but only JSON path implemented
 
-### 1.2 Add Native Binary Decoder in Julia
-The Rust side encodes to binary protocol, but Julia only has JSON decoding.
-Need to add in `src/ffi.jl`:
+**TODO:**
+- Julia binary decoder (`decode_native`)
+- Build Rust library
+- Test end-to-end
+
+---
+
+## Next Session Tasks
+
+### 1. Add Julia Binary Decoder
+
+In `src/ffi.jl`, add:
+
 ```julia
-function decode_native(buffer::Vector{UInt8}) -> Any
-    # Decode binary protocol: TYPE_NULL=0, TYPE_BOOL=1, TYPE_INT=2, etc.
+const TYPE_NULL   = 0x00
+const TYPE_BOOL   = 0x01
+const TYPE_INT    = 0x02
+const TYPE_FLOAT  = 0x03
+const TYPE_STRING = 0x04
+const TYPE_ARRAY  = 0x05
+const TYPE_RECORD = 0x06
+
+function decode_native(data::Vector{UInt8})
+    io = IOBuffer(data)
+    return _decode_value(io)
+end
+
+function _decode_value(io::IOBuffer)
+    tag = read(io, UInt8)
+    if tag == TYPE_NULL
+        return nothing
+    elseif tag == TYPE_BOOL
+        return read(io, UInt8) != 0
+    elseif tag == TYPE_INT
+        return read(io, Int64)
+    elseif tag == TYPE_FLOAT
+        return read(io, Float64)
+    elseif tag == TYPE_STRING
+        len = read(io, UInt32)
+        return String(read(io, len))
+    elseif tag == TYPE_ARRAY
+        len = read(io, UInt32)
+        return [_decode_value(io) for _ in 1:len]
+    elseif tag == TYPE_RECORD
+        len = read(io, UInt32)
+        dict = Dict{String, Any}()
+        for _ in 1:len
+            key_len = read(io, UInt32)
+            key = String(read(io, key_len))
+            dict[key] = _decode_value(io)
+        end
+        return dict
+    else
+        error("Unknown type tag: $tag")
+    end
 end
 ```
 
-### 1.3 Add `nickel_eval_native_ffi` Function
-Use `nickel_eval_native` from Rust + Julia decoder for true type preservation.
+### 2. Add `nickel_eval_native_ffi`
 
----
-
-## Priority 2: Cross-Platform Distribution
-
-### 2.1 BinaryBuilder.jl Integration
-Create `build_tarballs.jl` to build for all platforms:
-- Linux x86_64, aarch64
-- macOS x86_64, aarch64
-- Windows x86_64
-
-### 2.2 Create JLL Package
-`NickelEval_jll` package for automatic binary distribution.
-
----
-
-## Priority 3: Performance & Benchmarks
-
-### 3.1 Add Benchmarks
-Compare subprocess vs FFI:
 ```julia
-using BenchmarkTools
-@benchmark nickel_eval("{ x = 1 }")      # subprocess
-@benchmark nickel_eval_ffi("{ x = 1 }")  # FFI
-```
+function nickel_eval_native_ffi(code::String)
+    if !FFI_AVAILABLE
+        error("FFI not available. Build with: cd rust/nickel-jl && cargo build --release")
+    end
 
-### 3.2 Caching Layer (Optional)
-Consider caching evaluated configs for repeated access.
+    buffer = ccall((:nickel_eval_native, LIB_PATH),
+                   NativeBuffer, (Cstring,), code)
 
----
+    if buffer.data == C_NULL
+        error_ptr = ccall((:nickel_get_error, LIB_PATH), Ptr{Cchar}, ())
+        throw(NickelError(unsafe_string(error_ptr)))
+    end
 
-## Priority 4: Additional Features
+    data = unsafe_wrap(Array, buffer.data, buffer.len; own=false)
+    result = decode_native(copy(data))
 
-### 4.1 File Watching
-```julia
-watch_nickel_file("config.ncl") do config
-    # Called when file changes
+    ccall((:nickel_free_buffer, LIB_PATH), Cvoid, (NativeBuffer,), buffer)
+
+    return result
 end
 ```
 
-### 4.2 Nickel Contracts Integration
-Expose Nickel's type system for runtime validation.
+### 3. Build & Test
 
-### 4.3 Multi-file Evaluation
-Support `import` statements and multiple file evaluation.
-
----
-
-## Quick Reference
-
-**Build FFI locally:**
 ```bash
 cd rust/nickel-jl && cargo build --release
-mkdir -p deps
-cp target/release/libnickel_jl.dylib deps/  # macOS
+mkdir -p ../../deps
+cp target/release/libnickel_jl.dylib ../../deps/  # macOS
 ```
 
-**Test FFI available:**
 ```julia
 using NickelEval
-check_ffi_available()  # should return true after build
-nickel_eval_ffi("1 + 2")  # test it works
+nickel_eval_native_ffi("42")           # => 42::Int64
+nickel_eval_native_ffi("3.14")         # => 3.14::Float64
+nickel_eval_native_ffi("{ x = 1 }")    # => Dict("x" => 1)
 ```
 
-**Registry:** loulouJL (https://github.com/LouLouLibs/loulouJL)
-**Docs:** https://louloulibs.github.io/NickelEval/dev/
+---
+
+## Later (nice-to-have)
+
+- Cross-platform distribution via BinaryBuilder.jl
+- TOML/YAML export (already works via subprocess)
+- File watching
