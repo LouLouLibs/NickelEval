@@ -23,6 +23,7 @@ nickel_to_yaml
 ```@docs
 check_ffi_available
 nickel_eval_ffi
+nickel_eval_native
 ```
 
 ## String Macro

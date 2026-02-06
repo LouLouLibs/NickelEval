@@ -1,6 +1,34 @@
 # FFI Mode (High Performance)
 
-For repeated evaluations, NickelEval provides native FFI bindings to a Rust library that wraps `nickel-lang-core`. This eliminates subprocess overhead.
+For repeated evaluations, NickelEval provides native FFI bindings to a Rust library that wraps `nickel-lang-core`. This eliminates subprocess overhead and preserves Nickel's type semantics.
+
+## Two FFI Functions
+
+### `nickel_eval_native` - Native Types (Recommended)
+
+Parses Nickel directly into Julia native types using a binary protocol:
+
+```julia
+nickel_eval_native("42")           # => 42::Int64
+nickel_eval_native("3.14")         # => 3.14::Float64
+nickel_eval_native("true")         # => true::Bool
+nickel_eval_native("\"hello\"")    # => "hello"::String
+nickel_eval_native("null")         # => nothing
+
+nickel_eval_native("[1, 2, 3]")    # => Any[1, 2, 3]
+nickel_eval_native("{ x = 1 }")    # => Dict("x" => 1)
+```
+
+**Key benefit:** Type preservation. Integers stay `Int64`, decimals become `Float64`.
+
+### `nickel_eval_ffi` - JSON-based
+
+Uses JSON serialization internally, supports typed parsing:
+
+```julia
+nickel_eval_ffi("{ a = 1, b = 2 }")             # JSON.Object with dot-access
+nickel_eval_ffi("{ a = 1 }", Dict{String, Int}) # Typed Dict
+```
 
 ## Checking FFI Availability
 
@@ -11,21 +39,6 @@ check_ffi_available()  # => true or false
 ```
 
 FFI is available when the compiled Rust library exists in the `deps/` folder.
-
-## Using FFI Evaluation
-
-```julia
-# Basic evaluation
-nickel_eval_ffi("1 + 2")  # => 3
-
-# With dot-access
-config = nickel_eval_ffi("{ host = \"localhost\", port = 8080 }")
-config.host  # => "localhost"
-
-# Typed evaluation
-nickel_eval_ffi("{ a = 1, b = 2 }", Dict{String, Int})
-# => Dict{String, Int64}("a" => 1, "b" => 2)
-```
 
 ## Building the FFI Library
 
@@ -54,6 +67,20 @@ cp target/release/libnickel_jl.so ../../deps/
 cp target/release/nickel_jl.dll ../../deps/
 ```
 
+## Type Mapping
+
+| Nickel | Julia (native) |
+|--------|----------------|
+| Integer numbers | `Int64` |
+| Decimal numbers | `Float64` |
+| Bool | `Bool` |
+| String | `String` |
+| null | `nothing` |
+| Array | `Vector{Any}` |
+| Record | `Dict{String, Any}` |
+
+Note: Nickel has a single `Number` type. Whole numbers (like `42` or `42.0`) become `Int64`. Only true decimals (like `3.14`) become `Float64`.
+
 ## Performance Comparison
 
 FFI mode is faster for repeated evaluations because it:
@@ -64,22 +91,6 @@ FFI mode is faster for repeated evaluations because it:
 
 For single evaluations, the difference is minimal. For batch processing or interactive use, FFI mode is significantly faster.
 
-## Binary Protocol
-
-The FFI uses a binary protocol that preserves type information:
-
-| Type Tag | Nickel Type |
-|----------|-------------|
-| 0 | Null |
-| 1 | Bool |
-| 2 | Int64 |
-| 3 | Float64 |
-| 4 | String |
-| 5 | Array |
-| 6 | Record |
-
-This allows direct conversion to Julia types without JSON parsing overhead.
-
 ## Fallback Behavior
 
 If FFI is not available, you can still use the subprocess-based functions:
@@ -89,7 +100,7 @@ If FFI is not available, you can still use the subprocess-based functions:
 nickel_eval("1 + 2")
 
 # Requires FFI library
-nickel_eval_ffi("1 + 2")  # Error if not built
+nickel_eval_native("1 + 2")  # Error if not built
 ```
 
 ## Troubleshooting
