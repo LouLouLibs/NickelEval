@@ -205,8 +205,22 @@ fn encode_term(term: &RichTerm, buffer: &mut Vec<u8>) -> Result<(), String> {
                 }
             }
         }
+        Term::Enum(tag) => {
+            // Simple enum without argument: encode as record with just _tag
+            buffer.push(TYPE_RECORD);
+            buffer.extend_from_slice(&1u32.to_le_bytes()); // 1 field
+
+            // _tag field
+            let tag_key = b"_tag";
+            buffer.extend_from_slice(&(tag_key.len() as u32).to_le_bytes());
+            buffer.extend_from_slice(tag_key);
+            buffer.push(TYPE_STRING);
+            let tag_bytes = tag.label().as_bytes();
+            buffer.extend_from_slice(&(tag_bytes.len() as u32).to_le_bytes());
+            buffer.extend_from_slice(tag_bytes);
+        }
         Term::EnumVariant { tag, arg, .. } => {
-            // Encode enum variants as records with _tag and _value fields
+            // Enum variant with argument: encode as record with _tag and _value
             buffer.push(TYPE_RECORD);
             buffer.extend_from_slice(&2u32.to_le_bytes()); // 2 fields
 
@@ -737,5 +751,49 @@ mod tests {
         assert!(eval_nickel_json("3.14").unwrap().starts_with("3.14"));
         assert_eq!(eval_nickel_json(r#""hello""#).unwrap(), "\"hello\"");
         assert!(eval_nickel_json("[]").unwrap().contains("[]") || eval_nickel_json("[]").unwrap().contains("[\n]"));
+    }
+
+    #[test]
+    fn test_native_simple_enum() {
+        unsafe {
+            let code = CString::new("let x = 'Foo in x").unwrap();
+            let buffer = nickel_eval_native(code.as_ptr());
+            assert!(!buffer.data.is_null());
+            let data = std::slice::from_raw_parts(buffer.data, buffer.len);
+            // Should be a record with 1 field (_tag)
+            assert_eq!(data[0], TYPE_RECORD);
+            let field_count = u32::from_le_bytes(data[1..5].try_into().unwrap());
+            assert_eq!(field_count, 1);
+            nickel_free_buffer(buffer);
+        }
+    }
+
+    #[test]
+    fn test_native_enum_variant() {
+        unsafe {
+            let code = CString::new("let x = 'Some 42 in x").unwrap();
+            let buffer = nickel_eval_native(code.as_ptr());
+            assert!(!buffer.data.is_null());
+            let data = std::slice::from_raw_parts(buffer.data, buffer.len);
+            // Should be a record with 2 fields (_tag and _value)
+            assert_eq!(data[0], TYPE_RECORD);
+            let field_count = u32::from_le_bytes(data[1..5].try_into().unwrap());
+            assert_eq!(field_count, 2);
+            nickel_free_buffer(buffer);
+        }
+    }
+
+    #[test]
+    fn test_native_enum_with_record() {
+        unsafe {
+            let code = CString::new("let x = 'Ok { value = 123 } in x").unwrap();
+            let buffer = nickel_eval_native(code.as_ptr());
+            assert!(!buffer.data.is_null());
+            let data = std::slice::from_raw_parts(buffer.data, buffer.len);
+            assert_eq!(data[0], TYPE_RECORD);
+            let field_count = u32::from_le_bytes(data[1..5].try_into().unwrap());
+            assert_eq!(field_count, 2);
+            nickel_free_buffer(buffer);
+        }
     }
 }
