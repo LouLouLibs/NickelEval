@@ -26,9 +26,9 @@ makedocs(
     ]
 )
 
-deploydocs(;
+DocumenterVitepress.deploydocs(;
     repo = "github.com/LouLouLibs/NickelEval",
-    target = "build",  # this is where Vitepress stores its output
+    target = "build",
     devbranch = "main",
     branch = "gh-pages",
     push_preview = true,
