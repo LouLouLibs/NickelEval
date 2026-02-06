@@ -6,6 +6,7 @@
 nickel_eval
 nickel_eval_file
 nickel_read
+find_nickel_executable
 ```
 
 ## Export Functions
@@ -28,10 +29,4 @@ nickel_eval_ffi
 
 ```@docs
 @ncl_str
-```
-
-## Types
-
-```@docs
-NickelError
 ```
