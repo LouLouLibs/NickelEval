@@ -153,11 +153,7 @@ function nickel_eval_native(code::String)
     return _decode_native(data)
 end
 
-"""
-    _decode_native(data::Vector{UInt8}) -> Any
-
-Decode binary-encoded Nickel value to Julia native types.
-"""
+# Decode binary-encoded Nickel value to Julia native types.
 function _decode_native(data::Vector{UInt8})
     io = IOBuffer(data)
     return _decode_value(io)

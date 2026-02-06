@@ -8,7 +8,25 @@ export check_ffi_available, nickel_eval_ffi, nickel_eval_native
 export find_nickel_executable
 export NickelEnum
 
-# Custom exception for Nickel errors
+"""
+    NickelError <: Exception
+
+Exception thrown when Nickel evaluation fails.
+
+# Fields
+- `message::String`: The error message from Nickel
+
+# Examples
+```julia
+try
+    nickel_eval("{ x = }")  # syntax error
+catch e
+    if e isa NickelError
+        println("Nickel error: ", e.message)
+    end
+end
+```
+"""
 struct NickelError <: Exception
     message::String
 end
