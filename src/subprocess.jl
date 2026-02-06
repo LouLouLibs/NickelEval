@@ -67,28 +67,27 @@ function nickel_export(code::String; format::Symbol=:json)
 end
 
 """
-    nickel_eval(code::String) -> Any
+    nickel_eval(code::String) -> JSON.Object
 
 Evaluate Nickel code and return a Julia value.
 
-The Nickel code is exported to JSON and parsed into Julia types:
-- Objects become `Dict{String, Any}`
-- Arrays become `Vector{Any}`
-- Numbers, strings, booleans map directly
+Returns a `JSON.Object` for records (supports dot-access), or native Julia types
+for primitives and arrays.
 
 # Arguments
 - `code::String`: Nickel code to evaluate
 
 # Returns
-- `Any`: The evaluated result as a Julia value
+- Result as Julia value (JSON.Object for records, Vector for arrays, etc.)
 
 # Examples
 ```julia
 julia> nickel_eval("1 + 2")
 3
 
-julia> nickel_eval("{ a = 1, b = 2 }")
-Dict{String, Any}("a" => 1, "b" => 2)
+julia> result = nickel_eval("{ a = 1, b = 2 }")
+julia> result.a  # dot-access supported
+1
 
 julia> nickel_eval("let x = 5 in x * 2")
 10
@@ -96,24 +95,100 @@ julia> nickel_eval("let x = 5 in x * 2")
 """
 function nickel_eval(code::String)
     json_str = nickel_export(code; format=:json)
-    return JSON3.read(json_str)
+    return JSON.parse(json_str)
 end
 
 """
-    nickel_eval_file(path::String) -> Any
+    nickel_eval(code::String, ::Type{T}) -> T
+
+Evaluate Nickel code and parse the result directly into a specific Julia type.
+
+Uses JSON.jl 1.0's native typed parsing. Works with:
+- Primitive types: `Int`, `Float64`, `String`, `Bool`
+- Typed dictionaries: `Dict{String, Int}`, `Dict{Symbol, Float64}`
+- Typed arrays: `Vector{Int}`, `Vector{String}`
+- NamedTuples for quick typed record access
+- Custom structs
+
+# Arguments
+- `code::String`: Nickel code to evaluate
+- `T::Type`: Target Julia type
+
+# Returns
+- `T`: The evaluated result as the specified type
+
+# Examples
+```julia
+julia> nickel_eval("1 + 2", Int)
+3
+
+julia> nickel_eval("{ a = 1, b = 2 }", Dict{String, Int})
+Dict{String, Int64}("a" => 1, "b" => 2)
+
+julia> nickel_eval("[1, 2, 3]", Vector{Int})
+[1, 2, 3]
+
+julia> nickel_eval("{ x = 1.5, y = 2.5 }", @NamedTuple{x::Float64, y::Float64})
+(x = 1.5, y = 2.5)
+```
+"""
+function nickel_eval(code::String, ::Type{T}) where T
+    json_str = nickel_export(code; format=:json)
+    return JSON.parse(json_str, T)
+end
+
+"""
+    nickel_read(code::String, ::Type{T}) -> T
+
+Alias for `nickel_eval(code, T)`. Evaluate Nickel code into a typed Julia value.
+
+# Examples
+```julia
+julia> nickel_read("{ port = 8080, host = \"localhost\" }", @NamedTuple{port::Int, host::String})
+(port = 8080, host = "localhost")
+```
+"""
+nickel_read(code::String, ::Type{T}) where T = nickel_eval(code, T)
+
+"""
+    nickel_eval_file(path::String) -> JSON.Object
+    nickel_eval_file(path::String, ::Type{T}) -> T
 
 Evaluate a Nickel file and return a Julia value.
 
 # Arguments
 - `path::String`: Path to the Nickel file
+- `T::Type`: (optional) Target Julia type for typed parsing
 
 # Returns
-- `Any`: The evaluated result as a Julia value
+- `JSON.Object` or `T`: The evaluated result as a Julia value
 
 # Throws
 - `NickelError`: If file doesn't exist or evaluation fails
+
+# Examples
+```julia
+# Untyped evaluation (returns JSON.Object with dot-access)
+julia> config = nickel_eval_file("config.ncl")
+julia> config.port
+8080
+
+# Typed evaluation
+julia> nickel_eval_file("config.ncl", @NamedTuple{port::Int, host::String})
+(port = 8080, host = "localhost")
+```
 """
 function nickel_eval_file(path::String)
+    json_str = _eval_file_to_json(path)
+    return JSON.parse(json_str)
+end
+
+function nickel_eval_file(path::String, ::Type{T}) where T
+    json_str = _eval_file_to_json(path)
+    return JSON.parse(json_str, T)
+end
+
+function _eval_file_to_json(path::String)
     if !isfile(path)
         throw(NickelError("File not found: $path"))
     end
@@ -127,8 +202,7 @@ function nickel_eval_file(path::String)
 
     try
         run(pipeline(cmd, stdout=stdout_buf, stderr=stderr_buf), wait=true)
-        json_str = String(take!(stdout_buf))
-        return JSON3.read(json_str)
+        return String(take!(stdout_buf))
     catch e
         stderr_content = String(take!(stderr_buf))
         stdout_content = String(take!(stdout_buf))
@@ -150,8 +224,8 @@ String macro for inline Nickel evaluation.
 julia> ncl"1 + 2"
 3
 
-julia> ncl"{ name = \"test\", value = 42 }"
-Dict{String, Any}("name" => "test", "value" => 42)
+julia> ncl"{ name = \"test\", value = 42 }".name
+"test"
 
 julia> ncl\"\"\"
        let
@@ -167,3 +241,44 @@ macro ncl_str(code)
         nickel_eval($code)
     end
 end
+
+# Convenience export functions
+
+"""
+    nickel_to_json(code::String) -> String
+
+Export Nickel code to JSON string.
+
+# Examples
+```julia
+julia> nickel_to_json("{ a = 1, b = 2 }")
+"{\\n  \\"a\\": 1,\\n  \\"b\\": 2\\n}"
+```
+"""
+nickel_to_json(code::String) = nickel_export(code; format=:json)
+
+"""
+    nickel_to_toml(code::String) -> String
+
+Export Nickel code to TOML string.
+
+# Examples
+```julia
+julia> nickel_to_toml("{ name = \"myapp\", port = 8080 }")
+"name = \\"myapp\\"\\nport = 8080\\n"
+```
+"""
+nickel_to_toml(code::String) = nickel_export(code; format=:toml)
+
+"""
+    nickel_to_yaml(code::String) -> String
+
+Export Nickel code to YAML string.
+
+# Examples
+```julia
+julia> nickel_to_yaml("{ name = \"myapp\", port = 8080 }")
+"name: myapp\\nport: 8080\\n"
+```
+"""
+nickel_to_yaml(code::String) = nickel_export(code; format=:yaml)

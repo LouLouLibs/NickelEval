@@ -13,8 +13,6 @@
 #   - Direct memory sharing
 #   - Better performance for repeated evaluations
 
-using JSON3
-
 # Determine platform-specific library name
 const LIB_NAME = if Sys.iswindows()
     "nickel_jl.dll"
@@ -41,16 +39,40 @@ function check_ffi_available()
 end
 
 """
-    nickel_eval_ffi(code::String) -> Any
+    nickel_eval_ffi(code::String) -> JSON.Object
+    nickel_eval_ffi(code::String, ::Type{T}) -> T
 
-Evaluate Nickel code using native FFI bindings.
-Returns the parsed JSON result.
+Evaluate Nickel code using native FFI bindings (faster than subprocess).
+Returns the parsed JSON result, optionally typed.
 
-Throws an error if FFI is not available or if evaluation fails.
+Throws `NickelError` if FFI is not available or if evaluation fails.
+
+# Examples
+```julia
+julia> nickel_eval_ffi("1 + 2")
+3
+
+julia> result = nickel_eval_ffi("{ x = 1, y = 2 }")
+julia> result.x  # dot-access supported
+1
+
+julia> nickel_eval_ffi("{ x = 1, y = 2 }", Dict{String, Int})
+Dict{String, Int64}("x" => 1, "y" => 2)
+```
 """
 function nickel_eval_ffi(code::String)
+    result_json = _eval_ffi_to_json(code)
+    return JSON.parse(result_json)
+end
+
+function nickel_eval_ffi(code::String, ::Type{T}) where T
+    result_json = _eval_ffi_to_json(code)
+    return JSON.parse(result_json, T)
+end
+
+function _eval_ffi_to_json(code::String)
     if !FFI_AVAILABLE
-        error("FFI not available. Build the Rust library with: NICKELEVAL_BUILD_FFI=true julia --project=. -e 'using Pkg; Pkg.build()'")
+        error("FFI not available. Build the Rust library with: cd rust/nickel-jl && cargo build --release && cp target/release/libnickel_jl.dylib ../../deps/")
     end
 
     # Call the Rust function
@@ -62,9 +84,9 @@ function nickel_eval_ffi(code::String)
         error_ptr = ccall((:nickel_get_error, LIB_PATH), Ptr{Cchar}, ())
         if error_ptr != C_NULL
             error_msg = unsafe_string(error_ptr)
-            error("Nickel evaluation error: $error_msg")
+            throw(NickelError(error_msg))
         else
-            error("Nickel evaluation failed with unknown error")
+            throw(NickelError("Nickel evaluation failed with unknown error"))
         end
     end
 
@@ -74,6 +96,5 @@ function nickel_eval_ffi(code::String)
     # Free the allocated memory
     ccall((:nickel_free_string, LIB_PATH), Cvoid, (Ptr{Cchar},), result_ptr)
 
-    # Parse JSON and return
-    return JSON3.read(result_json)
+    return result_json
 end
