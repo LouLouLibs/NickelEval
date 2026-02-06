@@ -1,17 +1,32 @@
 # NickelEval.jl - Status & TODOs
 
-## Completed
+## Current Version: v0.3.0
 
-### Core Features
-- **Subprocess evaluation** - `nickel_eval`, `nickel_eval_file` via CLI
+## Completed Features
+
+### Core Evaluation
+- **Subprocess evaluation** - `nickel_eval`, `nickel_eval_file`, `nickel_read` via Nickel CLI
 - **FFI native evaluation** - `nickel_eval_native` via Rust binary protocol
-- **Type preservation** - Int64 vs Float64 from Nickel types directly
-- **Typed evaluation** - `nickel_eval(code, T)` for Dict, NamedTuple, etc.
-- **Export functions** - JSON, TOML, YAML via subprocess
-- **Documentation** - VitePress site at https://louloulibs.github.io/NickelEval/
+- **FFI JSON evaluation** - `nickel_eval_ffi` with typed parsing support
 
-### Test Coverage
-- 94 tests passing (53 subprocess + 41 FFI)
+### Type System
+- **Primitives**: `Int64`, `Float64`, `Bool`, `String`, `Nothing`
+- **Compounds**: `Vector{Any}`, `Dict{String, Any}`
+- **Enums**: `NickelEnum` with `tag::Symbol` and `arg::Any`
+  - Simple enums: `'Foo` → `NickelEnum(:Foo, nothing)`
+  - With arguments: `'Some 42` → `NickelEnum(:Some, 42)`
+  - Nested enums, arrays of enums, enums in records
+  - Pattern matching support
+  - Pretty printing: `'Some 42`
+
+### Export Functions
+- `nickel_to_json`, `nickel_to_toml`, `nickel_to_yaml` via subprocess
+
+### Infrastructure
+- Documentation site: https://louloulibs.github.io/NickelEval/dev/
+- 167 tests passing (53 subprocess + 114 FFI)
+- CI: tests + documentation deployment
+- Registry: loulouJL
 
 ---
 
@@ -24,9 +39,9 @@ Currently FFI requires local Rust build. Options:
 
 ### 2. CI FFI Testing
 Update CI workflow to build Rust library and run FFI tests.
+Currently CI only tests subprocess mode.
 
 ### 3. Performance Benchmarks
-Compare subprocess vs FFI:
 ```julia
 using BenchmarkTools
 @benchmark nickel_eval("{ x = 1 }")        # subprocess
@@ -37,10 +52,10 @@ using BenchmarkTools
 
 ## Nice-to-Have
 
-- File watching for config reload
-- Multi-file evaluation with imports
-- NamedTuple output option for records
-- Nickel contracts integration
+- **File watching** - auto-reload config on file change
+- **Multi-file evaluation** - support Nickel imports
+- **NamedTuple output** - optional record → NamedTuple conversion
+- **Nickel contracts** - expose type validation
 
 ---
 
@@ -56,6 +71,11 @@ cp target/release/libnickel_jl.so ../deps/     # Linux
 **Test FFI:**
 ```julia
 using NickelEval
-check_ffi_available()  # true if library found
-nickel_eval_native("42")  # => 42::Int64
+check_ffi_available()           # true if library found
+nickel_eval_native("42")        # => 42::Int64
+nickel_eval_native("'Some 42")  # => NickelEnum(:Some, 42)
 ```
+
+**Registry:** loulouJL (https://github.com/LouLouLibs/loulouJL)
+**Docs:** https://louloulibs.github.io/NickelEval/dev/
+**Repo:** https://github.com/LouLouLibs/NickelEval
