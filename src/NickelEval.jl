@@ -4,7 +4,7 @@ using JSON
 
 export nickel_eval, nickel_eval_file, nickel_export, nickel_read, @ncl_str, NickelError
 export nickel_to_json, nickel_to_toml, nickel_to_yaml
-export check_ffi_available, nickel_eval_ffi
+export check_ffi_available, nickel_eval_ffi, nickel_eval_native
 export find_nickel_executable
 
 # Custom exception for Nickel errors
