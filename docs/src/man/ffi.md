@@ -30,6 +30,79 @@ nickel_eval_ffi("{ a = 1, b = 2 }")             # JSON.Object with dot-access
 nickel_eval_ffi("{ a = 1 }", Dict{String, Int}) # Typed Dict
 ```
 
+## Supported Types
+
+### Primitive Types
+
+| Nickel | Julia | Example |
+|--------|-------|---------|
+| Integer numbers | `Int64` | `42` → `42::Int64` |
+| Decimal numbers | `Float64` | `3.14` → `3.14::Float64` |
+| Booleans | `Bool` | `true` → `true::Bool` |
+| Strings | `String` | `"hello"` → `"hello"::String` |
+| Null | `Nothing` | `null` → `nothing` |
+
+**Note:** Nickel has a single `Number` type. Whole numbers (like `42` or `42.0`) become `Int64`. Only true decimals (like `3.14`) become `Float64`.
+
+### Compound Types
+
+| Nickel | Julia | Example |
+|--------|-------|---------|
+| Arrays | `Vector{Any}` | `[1, 2, 3]` → `Any[1, 2, 3]` |
+| Records | `Dict{String, Any}` | `{ x = 1 }` → `Dict("x" => 1)` |
+
+### Enums
+
+Nickel enums are converted to `Dict{String, Any}` with special fields:
+
+**Simple enum** (no argument):
+```julia
+nickel_eval_native("let x = 'Foo in x")
+# => Dict("_tag" => "Foo")
+```
+
+**Enum with argument**:
+```julia
+nickel_eval_native("let x = 'Some 42 in x")
+# => Dict("_tag" => "Some", "_value" => 42)
+
+nickel_eval_native("let x = 'Ok { value = 123 } in x")
+# => Dict("_tag" => "Ok", "_value" => Dict("value" => 123))
+```
+
+### Nested Structures
+
+Arbitrary nesting is fully supported:
+
+```julia
+# Deeply nested records
+result = nickel_eval_native("{ a = { b = { c = 42 } } }")
+result["a"]["b"]["c"]  # => 42
+
+# Arrays of records
+result = nickel_eval_native("[{ id = 1 }, { id = 2 }]")
+result[1]["id"]  # => 1
+
+# Records with arrays
+result = nickel_eval_native("{ items = [1, 2, 3], name = \"test\" }")
+result["items"]  # => Any[1, 2, 3]
+
+# Mixed nesting
+result = nickel_eval_native("{ data = [{ a = 1 }, { b = [true, false] }] }")
+result["data"][2]["b"]  # => Any[true, false]
+```
+
+### Computed Values
+
+Functions and expressions are evaluated before conversion:
+
+```julia
+nickel_eval_native("1 + 2")  # => 3
+nickel_eval_native("let x = 10 in x * 2")  # => 20
+nickel_eval_native("[1, 2, 3] |> std.array.map (fun x => x * 2)")  # => Any[2, 4, 6]
+nickel_eval_native("{ a = 1 } & { b = 2 }")  # => Dict("a" => 1, "b" => 2)
+```
+
 ## Checking FFI Availability
 
 ```julia
@@ -66,20 +139,6 @@ cp target/release/libnickel_jl.so ../../deps/
 # Windows
 cp target/release/nickel_jl.dll ../../deps/
 ```
-
-## Type Mapping
-
-| Nickel | Julia (native) |
-|--------|----------------|
-| Integer numbers | `Int64` |
-| Decimal numbers | `Float64` |
-| Bool | `Bool` |
-| String | `String` |
-| null | `nothing` |
-| Array | `Vector{Any}` |
-| Record | `Dict{String, Any}` |
-
-Note: Nickel has a single `Number` type. Whole numbers (like `42` or `42.0`) become `Int64`. Only true decimals (like `3.14`) become `Float64`.
 
 ## Performance Comparison
 
