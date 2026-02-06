@@ -125,6 +125,46 @@ pub unsafe extern "C" fn nickel_eval_native(code: *const c_char) -> NativeBuffer
     }
 }
 
+/// Evaluate a Nickel file and return binary-encoded native types.
+///
+/// This function evaluates a Nickel file from the filesystem, which allows
+/// the file to use `import` statements to include other Nickel files.
+///
+/// # Safety
+/// - `path` must be a valid null-terminated C string containing a file path
+/// - The returned buffer must be freed with `nickel_free_buffer`
+/// - Returns NativeBuffer with null data on error; use `nickel_get_error` for message
+#[no_mangle]
+pub unsafe extern "C" fn nickel_eval_file_native(path: *const c_char) -> NativeBuffer {
+    let null_buffer = NativeBuffer { data: ptr::null_mut(), len: 0 };
+
+    if path.is_null() {
+        set_error("Null pointer passed to nickel_eval_file_native");
+        return null_buffer;
+    }
+
+    let path_str = match CStr::from_ptr(path).to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            set_error(&format!("Invalid UTF-8 in path: {}", e));
+            return null_buffer;
+        }
+    };
+
+    match eval_nickel_file_native(path_str) {
+        Ok(buffer) => {
+            let len = buffer.len();
+            let boxed = buffer.into_boxed_slice();
+            let data = Box::into_raw(boxed) as *mut u8;
+            NativeBuffer { data, len }
+        }
+        Err(e) => {
+            set_error(&e);
+            null_buffer
+        }
+    }
+}
+
 /// Internal function to evaluate Nickel code and return JSON.
 fn eval_nickel_json(code: &str) -> Result<String, String> {
     let source = Cursor::new(code.as_bytes());
@@ -144,6 +184,23 @@ fn eval_nickel_native(code: &str) -> Result<Vec<u8>, String> {
     let source = Cursor::new(code.as_bytes());
     let mut program: Program<CBNCache> = Program::new_from_source(source, "<ffi>", std::io::sink())
         .map_err(|e| format!("Parse error: {}", e))?;
+
+    let result = program
+        .eval_full_for_export()
+        .map_err(|e| program.report_as_str(e))?;
+
+    let mut buffer = Vec::new();
+    encode_term(&result, &mut buffer)?;
+    Ok(buffer)
+}
+
+/// Internal function to evaluate a Nickel file and return binary-encoded native types.
+fn eval_nickel_file_native(path: &str) -> Result<Vec<u8>, String> {
+    use std::path::PathBuf;
+
+    let file_path = PathBuf::from(path);
+    let mut program: Program<CBNCache> = Program::new_from_file(&file_path, std::io::sink())
+        .map_err(|e| format!("Error loading file: {}", e))?;
 
     let result = program
         .eval_full_for_export()
@@ -789,6 +846,84 @@ mod tests {
             assert_eq!(data[7], 1); // has argument
             assert_eq!(data[8], TYPE_RECORD);
             nickel_free_buffer(buffer);
+        }
+    }
+
+    #[test]
+    fn test_file_eval_native() {
+        use std::fs;
+        use std::io::Write;
+
+        // Create a temp directory with test files
+        let temp_dir = std::env::temp_dir().join("nickel_test");
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // Create a simple file
+        let simple_file = temp_dir.join("simple.ncl");
+        let mut f = fs::File::create(&simple_file).unwrap();
+        writeln!(f, "{{ x = 42 }}").unwrap();
+
+        unsafe {
+            let path = CString::new(simple_file.to_str().unwrap()).unwrap();
+            let buffer = nickel_eval_file_native(path.as_ptr());
+            assert!(!buffer.data.is_null(), "Expected result, got error: {:?}",
+                CStr::from_ptr(nickel_get_error()).to_str());
+            let data = std::slice::from_raw_parts(buffer.data, buffer.len);
+            assert_eq!(data[0], TYPE_RECORD);
+            nickel_free_buffer(buffer);
+        }
+
+        // Clean up
+        fs::remove_file(simple_file).unwrap();
+    }
+
+    #[test]
+    fn test_file_eval_with_imports() {
+        use std::fs;
+        use std::io::Write;
+
+        // Create a temp directory with test files
+        let temp_dir = std::env::temp_dir().join("nickel_import_test");
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // Create shared.ncl
+        let shared_file = temp_dir.join("shared.ncl");
+        let mut f = fs::File::create(&shared_file).unwrap();
+        writeln!(f, "{{ name = \"test\", value = 42 }}").unwrap();
+
+        // Create main.ncl that imports shared.ncl
+        let main_file = temp_dir.join("main.ncl");
+        let mut f = fs::File::create(&main_file).unwrap();
+        writeln!(f, "let shared = import \"shared.ncl\" in").unwrap();
+        writeln!(f, "{{ imported_name = shared.name, extra = \"added\" }}").unwrap();
+
+        unsafe {
+            let path = CString::new(main_file.to_str().unwrap()).unwrap();
+            let buffer = nickel_eval_file_native(path.as_ptr());
+            assert!(!buffer.data.is_null(), "Expected result, got error: {:?}",
+                CStr::from_ptr(nickel_get_error()).to_str());
+            let data = std::slice::from_raw_parts(buffer.data, buffer.len);
+            // Should be a record with two fields
+            assert_eq!(data[0], TYPE_RECORD);
+            let field_count = u32::from_le_bytes(data[1..5].try_into().unwrap());
+            assert_eq!(field_count, 2);
+            nickel_free_buffer(buffer);
+        }
+
+        // Clean up
+        fs::remove_file(main_file).unwrap();
+        fs::remove_file(shared_file).unwrap();
+        fs::remove_dir(temp_dir).unwrap();
+    }
+
+    #[test]
+    fn test_file_eval_not_found() {
+        unsafe {
+            let path = CString::new("/nonexistent/path/file.ncl").unwrap();
+            let buffer = nickel_eval_file_native(path.as_ptr());
+            assert!(buffer.data.is_null());
+            let error = nickel_get_error();
+            assert!(!error.is_null());
         }
     }
 }

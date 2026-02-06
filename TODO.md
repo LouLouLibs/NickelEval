@@ -7,6 +7,7 @@
 ### Core Evaluation
 - **Subprocess evaluation** - `nickel_eval`, `nickel_eval_file`, `nickel_read` via Nickel CLI
 - **FFI native evaluation** - `nickel_eval_native` via Rust binary protocol
+- **FFI file evaluation** - `nickel_eval_file_native` with import support
 - **FFI JSON evaluation** - `nickel_eval_ffi` with typed parsing support
 
 ### Type System
@@ -24,7 +25,7 @@
 
 ### Infrastructure
 - Documentation site: https://louloulibs.github.io/NickelEval/dev/
-- 167 tests passing (53 subprocess + 114 FFI)
+- 180 tests passing (53 subprocess + 127 FFI)
 - CI: tests + documentation deployment
 - Registry: loulouJL
 
@@ -53,7 +54,6 @@ using BenchmarkTools
 ## Nice-to-Have
 
 - **File watching** - auto-reload config on file change
-- **Multi-file evaluation** - support Nickel imports
 - **NamedTuple output** - optional record → NamedTuple conversion
 - **Nickel contracts** - expose type validation
 

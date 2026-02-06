@@ -153,6 +153,54 @@ function nickel_eval_native(code::String)
     return _decode_native(data)
 end
 
+"""
+    nickel_eval_file_native(path::String) -> Any
+
+Evaluate a Nickel file using native FFI with binary protocol.
+This function supports Nickel imports - files can use `import` statements
+to include other Nickel files relative to the evaluated file's location.
+
+Returns Julia native types directly from Nickel's type system (same as `nickel_eval_native`).
+
+# Examples
+```julia
+# config.ncl:
+# let shared = import "shared.ncl" in
+# { name = shared.project_name, version = "1.0" }
+
+julia> nickel_eval_file_native("config.ncl")
+Dict{String, Any}("name" => "MyProject", "version" => "1.0")
+```
+
+# Import Resolution
+Imports are resolved relative to the file being evaluated:
+- `import "other.ncl"` - relative to the file's directory
+- `import "/absolute/path.ncl"` - absolute path
+"""
+function nickel_eval_file_native(path::String)
+    _check_ffi_available()
+
+    # Convert to absolute path for proper import resolution
+    abs_path = abspath(path)
+
+    buffer = ccall((:nickel_eval_file_native, LIB_PATH),
+                   NativeBuffer, (Cstring,), abs_path)
+
+    if buffer.data == C_NULL
+        _throw_ffi_error()
+    end
+
+    # Copy data before freeing (Rust owns the memory)
+    data = Vector{UInt8}(undef, buffer.len)
+    unsafe_copyto!(pointer(data), buffer.data, buffer.len)
+
+    # Free the Rust buffer
+    ccall((:nickel_free_buffer, LIB_PATH), Cvoid, (NativeBuffer,), buffer)
+
+    # Decode the binary protocol
+    return _decode_native(data)
+end
+
 # Decode binary-encoded Nickel value to Julia native types.
 function _decode_native(data::Vector{UInt8})
     io = IOBuffer(data)

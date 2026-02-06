@@ -349,3 +349,108 @@ end
     @test result isa Dict{String, Int}
     @test result["x"] == 1
 end
+
+@testset "FFI File Evaluation with Imports" begin
+    # Create temp files for testing imports
+    mktempdir() do dir
+        # Create a shared config file
+        shared_file = joinpath(dir, "shared.ncl")
+        write(shared_file, """
+        {
+          project_name = "TestProject",
+          version = "1.0.0"
+        }
+        """)
+
+        # Create a main file that imports shared
+        main_file = joinpath(dir, "main.ncl")
+        write(main_file, """
+        let shared = import "shared.ncl" in
+        {
+          name = shared.project_name,
+          version = shared.version,
+          extra = "main-specific"
+        }
+        """)
+
+        # Test basic file evaluation with import
+        result = nickel_eval_file_native(main_file)
+        @test result isa Dict{String, Any}
+        @test result["name"] == "TestProject"
+        @test result["version"] == "1.0.0"
+        @test result["extra"] == "main-specific"
+
+        # Test nested imports
+        utils_file = joinpath(dir, "utils.ncl")
+        write(utils_file, """
+        {
+          helper = fun x => x * 2
+        }
+        """)
+
+        complex_file = joinpath(dir, "complex.ncl")
+        write(complex_file, """
+        let shared = import "shared.ncl" in
+        let utils = import "utils.ncl" in
+        {
+          project = shared.project_name,
+          doubled_value = utils.helper 21
+        }
+        """)
+
+        result = nickel_eval_file_native(complex_file)
+        @test result["project"] == "TestProject"
+        @test result["doubled_value"] === Int64(42)
+
+        # Test file evaluation with enums
+        enum_file = joinpath(dir, "enum_config.ncl")
+        write(enum_file, """
+        {
+          status = 'Active,
+          result = 'Ok 42
+        }
+        """)
+
+        result = nickel_eval_file_native(enum_file)
+        @test result["status"] isa NickelEnum
+        @test result["status"] == :Active
+        @test result["result"].tag == :Ok
+        @test result["result"].arg === Int64(42)
+
+        # Test subdirectory imports
+        subdir = joinpath(dir, "lib")
+        mkdir(subdir)
+        lib_file = joinpath(subdir, "library.ncl")
+        write(lib_file, """
+        {
+          lib_version = "2.0"
+        }
+        """)
+
+        with_subdir_file = joinpath(dir, "use_lib.ncl")
+        write(with_subdir_file, """
+        let lib = import "lib/library.ncl" in
+        {
+          using = lib.lib_version
+        }
+        """)
+
+        result = nickel_eval_file_native(with_subdir_file)
+        @test result["using"] == "2.0"
+    end
+
+    @testset "Error handling" begin
+        # File not found
+        @test_throws NickelError nickel_eval_file_native("/nonexistent/path/file.ncl")
+
+        # Import not found
+        mktempdir() do dir
+            bad_import = joinpath(dir, "bad_import.ncl")
+            write(bad_import, """
+            let missing = import "not_there.ncl" in
+            missing
+            """)
+            @test_throws NickelError nickel_eval_file_native(bad_import)
+        end
+    end
+end

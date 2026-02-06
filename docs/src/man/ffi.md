@@ -2,7 +2,7 @@
 
 For repeated evaluations, NickelEval provides native FFI bindings to a Rust library that wraps `nickel-lang-core`. This eliminates subprocess overhead and preserves Nickel's type semantics.
 
-## Two FFI Functions
+## FFI Functions
 
 ### `nickel_eval_native` - Native Types (Recommended)
 
@@ -20,6 +20,57 @@ nickel_eval_native("{ x = 1 }")    # => Dict("x" => 1)
 ```
 
 **Key benefit:** Type preservation. Integers stay `Int64`, decimals become `Float64`.
+
+### `nickel_eval_file_native` - File Evaluation with Imports
+
+Evaluates Nickel files from the filesystem, supporting `import` statements:
+
+```julia
+# config.ncl:
+# let shared = import "shared.ncl" in
+# { name = shared.project_name, version = "1.0" }
+
+nickel_eval_file_native("config.ncl")
+# => Dict{String, Any}("name" => "MyProject", "version" => "1.0")
+```
+
+**Import resolution:**
+- `import "other.ncl"` - resolved relative to the file's directory
+- `import "lib/module.ncl"` - subdirectory paths supported
+- `import "/absolute/path.ncl"` - absolute paths work too
+
+**Example with nested imports:**
+
+```julia
+# Create a project structure:
+# project/
+# ├── main.ncl          (imports shared.ncl and lib/utils.ncl)
+# ├── shared.ncl
+# └── lib/
+#     └── utils.ncl
+
+# shared.ncl
+# {
+#   project_name = "MyApp"
+# }
+
+# lib/utils.ncl
+# {
+#   double = fun x => x * 2
+# }
+
+# main.ncl
+# let shared = import "shared.ncl" in
+# let utils = import "lib/utils.ncl" in
+# {
+#   name = shared.project_name,
+#   result = utils.double 21
+# }
+
+result = nickel_eval_file_native("project/main.ncl")
+result["name"]    # => "MyApp"
+result["result"]  # => 42
+```
 
 ### `nickel_eval_ffi` - JSON-based
 
