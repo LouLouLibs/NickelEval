@@ -1,0 +1,22 @@
+# Julia
+Manifest.toml
+
+# Rust build artifacts
+rust/*/target/
+rust/**/Cargo.lock
+
+# Compiled FFI libraries (these should be built locally)
+deps/*.dylib
+deps/*.so
+deps/*.dll
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
