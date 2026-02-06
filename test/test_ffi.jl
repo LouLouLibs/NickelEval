@@ -83,34 +83,236 @@
         @test result == Any[2, 4, 6]
     end
 
-    @testset "Enums" begin
-        # Simple enum (no argument)
+    @testset "Enums - Simple (no argument)" begin
+        # Basic simple enum
         result = nickel_eval_native("let x = 'Foo in x")
         @test result isa NickelEnum
         @test result.tag == :Foo
         @test result.arg === nothing
-        @test result == :Foo  # convenience comparison
 
-        # Enum with integer argument
-        result = nickel_eval_native("let x = 'Some 42 in x")
-        @test result isa NickelEnum
-        @test result.tag == :Some
+        # Convenience comparison
+        @test result == :Foo
+        @test :Foo == result
+        @test result != :Bar
+
+        # Various tag names
+        @test nickel_eval_native("let x = 'None in x").tag == :None
+        @test nickel_eval_native("let x = 'True in x").tag == :True
+        @test nickel_eval_native("let x = 'False in x").tag == :False
+        @test nickel_eval_native("let x = 'Pending in x").tag == :Pending
+        @test nickel_eval_native("let x = 'Red in x").tag == :Red
+    end
+
+    @testset "Enums - With primitive arguments" begin
+        # Integer argument
+        result = nickel_eval_native("let x = 'Count 42 in x")
+        @test result.tag == :Count
         @test result.arg === Int64(42)
-        @test result == :Some
 
-        # Enum with record argument
+        # Negative integer (needs parentheses in Nickel)
+        result = nickel_eval_native("let x = 'Offset (-100) in x")
+        @test result.arg === Int64(-100)
+
+        # Float argument
+        result = nickel_eval_native("let x = 'Temperature 98.6 in x")
+        @test result.tag == :Temperature
+        @test result.arg ≈ 98.6
+
+        # String argument
+        result = nickel_eval_native("let x = 'Message \"hello world\" in x")
+        @test result.tag == :Message
+        @test result.arg == "hello world"
+
+        # Empty string argument
+        result = nickel_eval_native("let x = 'Empty \"\" in x")
+        @test result.arg == ""
+
+        # Boolean arguments
+        result = nickel_eval_native("let x = 'Flag true in x")
+        @test result.arg === true
+        result = nickel_eval_native("let x = 'Flag false in x")
+        @test result.arg === false
+
+        # Null argument
+        result = nickel_eval_native("let x = 'Nullable null in x")
+        @test result.arg === nothing
+    end
+
+    @testset "Enums - With record arguments" begin
+        # Simple record argument
         result = nickel_eval_native("let x = 'Ok { value = 123 } in x")
         @test result.tag == :Ok
         @test result.arg isa Dict{String, Any}
         @test result.arg["value"] === Int64(123)
 
-        # Match expression (returns the matched value, not an enum)
-        result = nickel_eval_native("let x = 'Success 42 in x |> match { 'Success v => v, 'Failure _ => 0 }")
+        # Record with multiple fields
+        code = """
+        let result = 'Ok { value = 123, message = "success" } in result
+        """
+        result = nickel_eval_native(code)
+        @test result.arg["value"] === Int64(123)
+        @test result.arg["message"] == "success"
+
+        # Error with details
+        code = """
+        let err = 'Error { code = 404, reason = "not found" } in err
+        """
+        result = nickel_eval_native(code)
+        @test result.tag == :Error
+        @test result.arg["code"] === Int64(404)
+        @test result.arg["reason"] == "not found"
+
+        # Nested record in enum
+        code = """
+        let x = 'Data { outer = { inner = 42 } } in x
+        """
+        result = nickel_eval_native(code)
+        @test result.arg["outer"]["inner"] === Int64(42)
+    end
+
+    @testset "Enums - With array arguments" begin
+        # Array of integers
+        result = nickel_eval_native("let x = 'Batch [1, 2, 3, 4, 5] in x")
+        @test result.tag == :Batch
+        @test result.arg == Any[1, 2, 3, 4, 5]
+
+        # Empty array
+        result = nickel_eval_native("let x = 'Empty [] in x")
+        @test result.arg == Any[]
+
+        # Array of strings
+        result = nickel_eval_native("let x = 'Names [\"alice\", \"bob\"] in x")
+        @test result.arg == Any["alice", "bob"]
+
+        # Array of records
+        code = """
+        let x = 'Users [{ name = "alice" }, { name = "bob" }] in x
+        """
+        result = nickel_eval_native(code)
+        @test result.arg[1]["name"] == "alice"
+        @test result.arg[2]["name"] == "bob"
+    end
+
+    @testset "Enums - Nested enums" begin
+        # Enum inside record inside enum
+        code = """
+        let outer = 'Container { inner = 'Value 42 } in outer
+        """
+        result = nickel_eval_native(code)
+        @test result.tag == :Container
+        @test result.arg["inner"] isa NickelEnum
+        @test result.arg["inner"].tag == :Value
+        @test result.arg["inner"].arg === Int64(42)
+
+        # Array of enums inside enum
+        code = """
+        let items = 'List ['Some 1, 'None, 'Some 3] in items
+        """
+        result = nickel_eval_native(code)
+        @test result.tag == :List
+        @test length(result.arg) == 3
+        @test result.arg[1].tag == :Some
+        @test result.arg[1].arg === Int64(1)
+        @test result.arg[2].tag == :None
+        @test result.arg[2].arg === nothing
+        @test result.arg[3].tag == :Some
+        @test result.arg[3].arg === Int64(3)
+
+        # Deeply nested enums
+        code = """
+        let x = 'L1 { a = 'L2 { b = 'L3 42 } } in x
+        """
+        result = nickel_eval_native(code)
+        @test result.arg["a"].arg["b"].arg === Int64(42)
+    end
+
+    @testset "Enums - Pattern matching" begin
+        # Match resolves to extracted value
+        code = """
+        let x = 'Some 42 in
+        x |> match {
+          'Some v => v,
+          'None => 0
+        }
+        """
+        result = nickel_eval_native(code)
         @test result === Int64(42)
 
-        # Pretty printing
+        # Match with record destructuring
+        code = """
+        let result = 'Ok { value = 100 } in
+        result |> match {
+          'Ok r => r.value,
+          'Error _ => -1
+        }
+        """
+        result = nickel_eval_native(code)
+        @test result === Int64(100)
+
+        # Match returning enum
+        code = """
+        let x = 'Some 42 in
+        x |> match {
+          'Some v => 'Doubled (v * 2),
+          'None => 'Zero 0
+        }
+        """
+        result = nickel_eval_native(code)
+        @test result.tag == :Doubled
+        @test result.arg === Int64(84)
+    end
+
+    @testset "Enums - Pretty printing" begin
+        # Simple enum
         @test repr(nickel_eval_native("let x = 'None in x")) == "'None"
+        @test repr(nickel_eval_native("let x = 'Foo in x")) == "'Foo"
+
+        # Enum with simple argument
         @test repr(nickel_eval_native("let x = 'Some 42 in x")) == "'Some 42"
+
+        # Enum with string argument
+        result = nickel_eval_native("let x = 'Msg \"hi\" in x")
+        @test startswith(repr(result), "'Msg")
+    end
+
+    @testset "Enums - Real-world patterns" begin
+        # Result type pattern
+        code = """
+        let divide = fun a b =>
+          if b == 0 then
+            'Err "division by zero"
+          else
+            'Ok (a / b)
+        in
+        divide 10 2
+        """
+        result = nickel_eval_native(code)
+        @test result == :Ok
+        @test result.arg === Int64(5)
+
+        # Option type pattern
+        code = """
+        let find = fun arr pred =>
+          let matches = std.array.filter pred arr in
+          if std.array.length matches == 0 then
+            'None
+          else
+            'Some (std.array.first matches)
+        in
+        find [1, 2, 3, 4] (fun x => x > 2)
+        """
+        result = nickel_eval_native(code)
+        @test result == :Some
+        @test result.arg === Int64(3)
+
+        # State machine pattern
+        code = """
+        let state = 'Running { progress = 75, task = "downloading" } in state
+        """
+        result = nickel_eval_native(code)
+        @test result.tag == :Running
+        @test result.arg["progress"] === Int64(75)
+        @test result.arg["task"] == "downloading"
     end
 
     @testset "Deeply nested structures" begin

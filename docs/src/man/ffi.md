@@ -54,44 +54,198 @@ nickel_eval_ffi("{ a = 1 }", Dict{String, Int}) # Typed Dict
 
 ### Enums
 
-Nickel enums are converted to the `NickelEnum` type, preserving enum semantics:
+Nickel enums (also called "enum tags" or "variants") are converted to the `NickelEnum` type, preserving enum semantics distinct from regular records.
+
+#### The NickelEnum Type
 
 ```julia
 struct NickelEnum
-    tag::Symbol
-    arg::Any  # nothing for simple enums
+    tag::Symbol   # The variant name as a Julia Symbol
+    arg::Any      # The argument (nothing for simple enums)
 end
 ```
 
-**Simple enum** (no argument):
-```julia
-result = nickel_eval_native("let x = 'Foo in x")
-# => NickelEnum(:Foo, nothing)
+#### Simple Enums (No Argument)
 
-result.tag   # => :Foo
+Simple enums are tags without associated data, commonly used for status flags or options:
+
+```julia
+# Boolean-like enums
+result = nickel_eval_native("let x = 'True in x")
+result.tag   # => :True
 result.arg   # => nothing
-result == :Foo  # => true (convenience comparison)
+
+# Status enums
+result = nickel_eval_native("let status = 'Pending in status")
+result == :Pending  # => true (convenience comparison)
+
+# Multiple variants
+code = \"\"\"
+let color = 'Red in color
+\"\"\"
+result = nickel_eval_native(code)
+result.tag  # => :Red
 ```
 
-**Enum with argument**:
+#### Enums with Primitive Arguments
+
+Enums can carry a single value of any type:
+
 ```julia
+# Integer argument
+result = nickel_eval_native("let x = 'Count 42 in x")
+result.tag   # => :Count
+result.arg   # => 42 (Int64)
+
+# String argument
+result = nickel_eval_native("let x = 'Message \"hello\" in x")
+result.tag   # => :Message
+result.arg   # => "hello"
+
+# Float argument
+result = nickel_eval_native("let x = 'Temperature 98.6 in x")
+result.arg   # => 98.6 (Float64)
+
+# Boolean argument
+result = nickel_eval_native("let x = 'Flag true in x")
+result.arg   # => true
+```
+
+#### Enums with Record Arguments
+
+Enums can carry complex record data:
+
+```julia
+# Record argument
+code = \"\"\"
+let result = 'Ok { value = 123, message = "success" } in result
+\"\"\"
+result = nickel_eval_native(code)
+result.tag              # => :Ok
+result.arg              # => Dict{String, Any}
+result.arg["value"]     # => 123
+result.arg["message"]   # => "success"
+
+# Error with details
+code = \"\"\"
+let err = 'Error { code = 404, reason = "not found" } in err
+\"\"\"
+result = nickel_eval_native(code)
+result.tag              # => :Error
+result.arg["code"]      # => 404
+result.arg["reason"]    # => "not found"
+```
+
+#### Enums with Array Arguments
+
+```julia
+# Array argument
+code = \"\"\"
+let batch = 'Batch [1, 2, 3, 4, 5] in batch
+\"\"\"
+result = nickel_eval_native(code)
+result.tag   # => :Batch
+result.arg   # => Any[1, 2, 3, 4, 5]
+```
+
+#### Nested Enums
+
+Enums can contain other enums:
+
+```julia
+# Nested enum in record
+code = \"\"\"
+let outer = 'Container { inner = 'Value 42 } in outer
+\"\"\"
+result = nickel_eval_native(code)
+result.tag                 # => :Container
+result.arg["inner"].tag    # => :Value
+result.arg["inner"].arg    # => 42
+
+# Enum in array
+code = \"\"\"
+let items = 'List ['Some 1, 'None, 'Some 3] in items
+\"\"\"
+result = nickel_eval_native(code)
+result.tag         # => :List
+result.arg[1].tag  # => :Some
+result.arg[1].arg  # => 1
+result.arg[2].tag  # => :None
+result.arg[2].arg  # => nothing
+```
+
+#### Pattern Matching with Nickel
+
+When Nickel's `match` expression resolves an enum, you get the matched value:
+
+```julia
+# Match resolves to the extracted value
+code = \"\"\"
+let x = 'Some 42 in
+x |> match {
+  'Some v => v,
+  'None => 0
+}
+\"\"\"
+result = nickel_eval_native(code)
+# => 42 (the matched value, not an enum)
+
+# Match with record destructuring
+code = \"\"\"
+let result = 'Ok { value = 100 } in
+result |> match {
+  'Ok r => r.value,
+  'Error _ => -1
+}
+\"\"\"
+result = nickel_eval_native(code)
+# => 100
+```
+
+#### Working with NickelEnum in Julia
+
+```julia
+# Type checking
 result = nickel_eval_native("let x = 'Some 42 in x")
-# => NickelEnum(:Some, 42)
+result isa NickelEnum  # => true
 
-result.tag   # => :Some
-result.arg   # => 42
+# Symbol comparison (both directions work)
+result == :Some  # => true
+:Some == result  # => true
 
-result = nickel_eval_native("let x = 'Ok { value = 123 } in x")
-result.arg["value"]  # => 123
+# Accessing fields
+result.tag  # => :Some
+result.arg  # => 42
+
+# Pretty printing
+repr(result)  # => "'Some 42"
+
+# Simple enum printing
+repr(nickel_eval_native("let x = 'None in x"))  # => "'None"
 ```
 
-**Pretty printing**:
+#### Real-World Example: Result Type
+
 ```julia
-repr(nickel_eval_native("let x = 'None in x"))    # => "'None"
-repr(nickel_eval_native("let x = 'Some 42 in x")) # => "'Some 42"
+# Simulating Rust-like Result type
+code = \"\"\"
+let divide = fun a b =>
+  if b == 0 then
+    'Err "division by zero"
+  else
+    'Ok (a / b)
+in
+divide 10 2
+\"\"\"
+result = nickel_eval_native(code)
+if result == :Ok
+    println("Result: ", result.arg)  # => 5
+else
+    println("Error: ", result.arg)
+end
 ```
 
-This mirrors Nickel's `std.enum.to_tag_and_arg` semantics while using a proper Julia type.
+This representation mirrors Nickel's `std.enum.to_tag_and_arg` semantics while providing a proper Julia type that preserves enum identity.
 
 ### Nested Structures
 
