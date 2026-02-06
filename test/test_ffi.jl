@@ -84,21 +84,21 @@
     end
 
     @testset "Enums" begin
-        # Simple enum (no argument)
+        # Simple enum (no argument) - matches std.enum.to_tag_and_arg format
         result = nickel_eval_native("let x = 'Foo in x")
         @test result isa Dict{String, Any}
-        @test result["_tag"] == "Foo"
-        @test !haskey(result, "_value")
+        @test result["tag"] == "Foo"
+        @test !haskey(result, "arg")
 
         # Enum with integer argument
         result = nickel_eval_native("let x = 'Some 42 in x")
-        @test result["_tag"] == "Some"
-        @test result["_value"] === Int64(42)
+        @test result["tag"] == "Some"
+        @test result["arg"] === Int64(42)
 
         # Enum with record argument
         result = nickel_eval_native("let x = 'Ok { value = 123 } in x")
-        @test result["_tag"] == "Ok"
-        @test result["_value"]["value"] === Int64(123)
+        @test result["tag"] == "Ok"
+        @test result["arg"]["value"] === Int64(123)
 
         # Match expression
         result = nickel_eval_native("let x = 'Success 42 in x |> match { 'Success v => v, 'Failure _ => 0 }")

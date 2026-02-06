@@ -206,12 +206,12 @@ fn encode_term(term: &RichTerm, buffer: &mut Vec<u8>) -> Result<(), String> {
             }
         }
         Term::Enum(tag) => {
-            // Simple enum without argument: encode as record with just _tag
+            // Simple enum: encode as { tag = "Name" } (matches std.enum.to_tag_and_arg)
             buffer.push(TYPE_RECORD);
             buffer.extend_from_slice(&1u32.to_le_bytes()); // 1 field
 
-            // _tag field
-            let tag_key = b"_tag";
+            // tag field
+            let tag_key = b"tag";
             buffer.extend_from_slice(&(tag_key.len() as u32).to_le_bytes());
             buffer.extend_from_slice(tag_key);
             buffer.push(TYPE_STRING);
@@ -220,12 +220,12 @@ fn encode_term(term: &RichTerm, buffer: &mut Vec<u8>) -> Result<(), String> {
             buffer.extend_from_slice(tag_bytes);
         }
         Term::EnumVariant { tag, arg, .. } => {
-            // Enum variant with argument: encode as record with _tag and _value
+            // Enum with argument: encode as { tag = "Name", arg = value } (matches std.enum.to_tag_and_arg)
             buffer.push(TYPE_RECORD);
             buffer.extend_from_slice(&2u32.to_le_bytes()); // 2 fields
 
-            // _tag field
-            let tag_key = b"_tag";
+            // tag field
+            let tag_key = b"tag";
             buffer.extend_from_slice(&(tag_key.len() as u32).to_le_bytes());
             buffer.extend_from_slice(tag_key);
             buffer.push(TYPE_STRING);
@@ -233,10 +233,10 @@ fn encode_term(term: &RichTerm, buffer: &mut Vec<u8>) -> Result<(), String> {
             buffer.extend_from_slice(&(tag_bytes.len() as u32).to_le_bytes());
             buffer.extend_from_slice(tag_bytes);
 
-            // _value field
-            let value_key = b"_value";
-            buffer.extend_from_slice(&(value_key.len() as u32).to_le_bytes());
-            buffer.extend_from_slice(value_key);
+            // arg field
+            let arg_key = b"arg";
+            buffer.extend_from_slice(&(arg_key.len() as u32).to_le_bytes());
+            buffer.extend_from_slice(arg_key);
             encode_term(arg, buffer)?;
         }
         other => {

@@ -53,21 +53,27 @@ nickel_eval_ffi("{ a = 1 }", Dict{String, Int}) # Typed Dict
 
 ### Enums
 
-Nickel enums are converted to `Dict{String, Any}` with special fields:
+Nickel enums are converted to `Dict{String, Any}` matching the format of `std.enum.to_tag_and_arg`:
 
 **Simple enum** (no argument):
 ```julia
 nickel_eval_native("let x = 'Foo in x")
-# => Dict("_tag" => "Foo")
+# => Dict("tag" => "Foo")
 ```
 
 **Enum with argument**:
 ```julia
 nickel_eval_native("let x = 'Some 42 in x")
-# => Dict("_tag" => "Some", "_value" => 42)
+# => Dict("tag" => "Some", "arg" => 42)
 
 nickel_eval_native("let x = 'Ok { value = 123 } in x")
-# => Dict("_tag" => "Ok", "_value" => Dict("value" => 123))
+# => Dict("tag" => "Ok", "arg" => Dict("value" => 123))
+```
+
+This matches Nickel's standard library convention:
+```nickel
+'Some 42 |> std.enum.to_tag_and_arg
+# => { tag = "Some", arg = 42 }
 ```
 
 ### Nested Structures
