@@ -18,7 +18,8 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Install Nickel
         run: |
-          curl -L https://github.com/tweag/nickel/releases/download/1.7.0/nickel-linux-x86_64 -o /usr/local/bin/nickel
-          chmod +x /usr/local/bin/nickel
+          curl -L https://github.com/tweag/nickel/releases/download/1.15.1/nickel-x86_64-linux -o nickel
+          chmod +x nickel
+          sudo mv nickel /usr/local/bin/
       - name: Run tests
         run: julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
