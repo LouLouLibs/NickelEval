@@ -2,11 +2,11 @@
 
 using NickelEval
 using Documenter
+using DocumenterVitepress
 
 makedocs(
-    format = Documenter.HTML(
-        prettyurls = get(ENV, "CI", nothing) == "true",
-        canonical = "https://louloulibs.github.io/NickelEval",
+    format = MarkdownVitepress(
+        repo = "https://github.com/LouLouLibs/NickelEval",
     ),
     repo = Remotes.GitHub("LouLouLibs", "NickelEval"),
     sitename = "NickelEval.jl",
@@ -26,8 +26,10 @@ makedocs(
     ]
 )
 
-deploydocs(;
+DocumenterVitepress.deploydocs(;
     repo = "github.com/LouLouLibs/NickelEval",
+    target = "build",
     devbranch = "main",
+    branch = "gh-pages",
     push_preview = true,
 )
