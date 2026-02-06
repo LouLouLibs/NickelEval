@@ -61,10 +61,3 @@ nickel_to_toml("{ name = \"myapp\", version = \"1.0\" }")
 - **Safe**: No side effects, pure functional
 
 NickelEval.jl lets you leverage Nickel's power directly in your Julia workflows.
-
-## Contents
-
-```@contents
-Pages = ["man/quickstart.md", "man/typed.md", "man/export.md", "man/ffi.md", "lib/public.md"]
-Depth = 2
-```
