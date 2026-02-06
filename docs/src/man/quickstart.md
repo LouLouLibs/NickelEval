@@ -2,6 +2,16 @@
 
 ## Installation
 
+### From LouLouLibs Registry (Recommended)
+
+```julia
+using Pkg
+Pkg.Registry.add(url="https://github.com/LouLouLibs/loulouJL")
+Pkg.add("NickelEval")
+```
+
+### From GitHub URL
+
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/LouLouLibs/NickelEval")
