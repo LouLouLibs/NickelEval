@@ -65,11 +65,6 @@ NickelEval.jl lets you leverage Nickel's power directly in your Julia workflows.
 ## Contents
 
 ```@contents
-Pages = [
-    "man/quickstart.md",
-    "man/typed.md",
-    "man/export.md",
-    "man/ffi.md",
-    "lib/public.md",
-]
+Pages = ["man/quickstart.md", "man/typed.md", "man/export.md", "man/ffi.md", "lib/public.md"]
+Depth = 2
 ```
