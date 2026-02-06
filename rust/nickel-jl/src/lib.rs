@@ -37,6 +37,7 @@ const TYPE_FLOAT: u8 = 3;
 const TYPE_STRING: u8 = 4;
 const TYPE_ARRAY: u8 = 5;
 const TYPE_RECORD: u8 = 6;
+const TYPE_ENUM: u8 = 7;
 
 /// Result buffer for native evaluation
 #[repr(C)]
@@ -206,37 +207,22 @@ fn encode_term(term: &RichTerm, buffer: &mut Vec<u8>) -> Result<(), String> {
             }
         }
         Term::Enum(tag) => {
-            // Simple enum: encode as { tag = "Name" } (matches std.enum.to_tag_and_arg)
-            buffer.push(TYPE_RECORD);
-            buffer.extend_from_slice(&1u32.to_le_bytes()); // 1 field
-
-            // tag field
-            let tag_key = b"tag";
-            buffer.extend_from_slice(&(tag_key.len() as u32).to_le_bytes());
-            buffer.extend_from_slice(tag_key);
-            buffer.push(TYPE_STRING);
+            // Simple enum without argument
+            // Format: TYPE_ENUM | tag_len (u32) | tag_bytes | has_arg (u8 = 0)
+            buffer.push(TYPE_ENUM);
             let tag_bytes = tag.label().as_bytes();
             buffer.extend_from_slice(&(tag_bytes.len() as u32).to_le_bytes());
             buffer.extend_from_slice(tag_bytes);
+            buffer.push(0); // no argument
         }
         Term::EnumVariant { tag, arg, .. } => {
-            // Enum with argument: encode as { tag = "Name", arg = value } (matches std.enum.to_tag_and_arg)
-            buffer.push(TYPE_RECORD);
-            buffer.extend_from_slice(&2u32.to_le_bytes()); // 2 fields
-
-            // tag field
-            let tag_key = b"tag";
-            buffer.extend_from_slice(&(tag_key.len() as u32).to_le_bytes());
-            buffer.extend_from_slice(tag_key);
-            buffer.push(TYPE_STRING);
+            // Enum with argument
+            // Format: TYPE_ENUM | tag_len (u32) | tag_bytes | has_arg (u8 = 1) | arg_value
+            buffer.push(TYPE_ENUM);
             let tag_bytes = tag.label().as_bytes();
             buffer.extend_from_slice(&(tag_bytes.len() as u32).to_le_bytes());
             buffer.extend_from_slice(tag_bytes);
-
-            // arg field
-            let arg_key = b"arg";
-            buffer.extend_from_slice(&(arg_key.len() as u32).to_le_bytes());
-            buffer.extend_from_slice(arg_key);
+            buffer.push(1); // has argument
             encode_term(arg, buffer)?;
         }
         other => {
@@ -760,10 +746,12 @@ mod tests {
             let buffer = nickel_eval_native(code.as_ptr());
             assert!(!buffer.data.is_null());
             let data = std::slice::from_raw_parts(buffer.data, buffer.len);
-            // Should be a record with 1 field (_tag)
-            assert_eq!(data[0], TYPE_RECORD);
-            let field_count = u32::from_le_bytes(data[1..5].try_into().unwrap());
-            assert_eq!(field_count, 1);
+            // TYPE_ENUM | tag_len | "Foo" | has_arg=0
+            assert_eq!(data[0], TYPE_ENUM);
+            let tag_len = u32::from_le_bytes(data[1..5].try_into().unwrap()) as usize;
+            assert_eq!(tag_len, 3); // "Foo"
+            assert_eq!(&data[5..8], b"Foo");
+            assert_eq!(data[8], 0); // no argument
             nickel_free_buffer(buffer);
         }
     }
@@ -775,10 +763,13 @@ mod tests {
             let buffer = nickel_eval_native(code.as_ptr());
             assert!(!buffer.data.is_null());
             let data = std::slice::from_raw_parts(buffer.data, buffer.len);
-            // Should be a record with 2 fields (_tag and _value)
-            assert_eq!(data[0], TYPE_RECORD);
-            let field_count = u32::from_le_bytes(data[1..5].try_into().unwrap());
-            assert_eq!(field_count, 2);
+            // TYPE_ENUM | tag_len | "Some" | has_arg=1 | TYPE_INT | 42
+            assert_eq!(data[0], TYPE_ENUM);
+            let tag_len = u32::from_le_bytes(data[1..5].try_into().unwrap()) as usize;
+            assert_eq!(tag_len, 4); // "Some"
+            assert_eq!(&data[5..9], b"Some");
+            assert_eq!(data[9], 1); // has argument
+            assert_eq!(data[10], TYPE_INT);
             nickel_free_buffer(buffer);
         }
     }
@@ -790,9 +781,13 @@ mod tests {
             let buffer = nickel_eval_native(code.as_ptr());
             assert!(!buffer.data.is_null());
             let data = std::slice::from_raw_parts(buffer.data, buffer.len);
-            assert_eq!(data[0], TYPE_RECORD);
-            let field_count = u32::from_le_bytes(data[1..5].try_into().unwrap());
-            assert_eq!(field_count, 2);
+            // TYPE_ENUM | tag_len | "Ok" | has_arg=1 | TYPE_RECORD | ...
+            assert_eq!(data[0], TYPE_ENUM);
+            let tag_len = u32::from_le_bytes(data[1..5].try_into().unwrap()) as usize;
+            assert_eq!(tag_len, 2); // "Ok"
+            assert_eq!(&data[5..7], b"Ok");
+            assert_eq!(data[7], 1); // has argument
+            assert_eq!(data[8], TYPE_RECORD);
             nickel_free_buffer(buffer);
         }
     }

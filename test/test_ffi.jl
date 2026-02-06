@@ -84,25 +84,33 @@
     end
 
     @testset "Enums" begin
-        # Simple enum (no argument) - matches std.enum.to_tag_and_arg format
+        # Simple enum (no argument)
         result = nickel_eval_native("let x = 'Foo in x")
-        @test result isa Dict{String, Any}
-        @test result["tag"] == "Foo"
-        @test !haskey(result, "arg")
+        @test result isa NickelEnum
+        @test result.tag == :Foo
+        @test result.arg === nothing
+        @test result == :Foo  # convenience comparison
 
         # Enum with integer argument
         result = nickel_eval_native("let x = 'Some 42 in x")
-        @test result["tag"] == "Some"
-        @test result["arg"] === Int64(42)
+        @test result isa NickelEnum
+        @test result.tag == :Some
+        @test result.arg === Int64(42)
+        @test result == :Some
 
         # Enum with record argument
         result = nickel_eval_native("let x = 'Ok { value = 123 } in x")
-        @test result["tag"] == "Ok"
-        @test result["arg"]["value"] === Int64(123)
+        @test result.tag == :Ok
+        @test result.arg isa Dict{String, Any}
+        @test result.arg["value"] === Int64(123)
 
-        # Match expression
+        # Match expression (returns the matched value, not an enum)
         result = nickel_eval_native("let x = 'Success 42 in x |> match { 'Success v => v, 'Failure _ => 0 }")
         @test result === Int64(42)
+
+        # Pretty printing
+        @test repr(nickel_eval_native("let x = 'None in x")) == "'None"
+        @test repr(nickel_eval_native("let x = 'Some 42 in x")) == "'Some 42"
     end
 
     @testset "Deeply nested structures" begin

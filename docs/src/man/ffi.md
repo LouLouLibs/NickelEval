@@ -50,31 +50,48 @@ nickel_eval_ffi("{ a = 1 }", Dict{String, Int}) # Typed Dict
 |--------|-------|---------|
 | Arrays | `Vector{Any}` | `[1, 2, 3]` → `Any[1, 2, 3]` |
 | Records | `Dict{String, Any}` | `{ x = 1 }` → `Dict("x" => 1)` |
+| Enums | `NickelEnum` | `'Some 42` → `NickelEnum(:Some, 42)` |
 
 ### Enums
 
-Nickel enums are converted to `Dict{String, Any}` matching the format of `std.enum.to_tag_and_arg`:
+Nickel enums are converted to the `NickelEnum` type, preserving enum semantics:
+
+```julia
+struct NickelEnum
+    tag::Symbol
+    arg::Any  # nothing for simple enums
+end
+```
 
 **Simple enum** (no argument):
 ```julia
-nickel_eval_native("let x = 'Foo in x")
-# => Dict("tag" => "Foo")
+result = nickel_eval_native("let x = 'Foo in x")
+# => NickelEnum(:Foo, nothing)
+
+result.tag   # => :Foo
+result.arg   # => nothing
+result == :Foo  # => true (convenience comparison)
 ```
 
 **Enum with argument**:
 ```julia
-nickel_eval_native("let x = 'Some 42 in x")
-# => Dict("tag" => "Some", "arg" => 42)
+result = nickel_eval_native("let x = 'Some 42 in x")
+# => NickelEnum(:Some, 42)
 
-nickel_eval_native("let x = 'Ok { value = 123 } in x")
-# => Dict("tag" => "Ok", "arg" => Dict("value" => 123))
+result.tag   # => :Some
+result.arg   # => 42
+
+result = nickel_eval_native("let x = 'Ok { value = 123 } in x")
+result.arg["value"]  # => 123
 ```
 
-This matches Nickel's standard library convention:
-```nickel
-'Some 42 |> std.enum.to_tag_and_arg
-# => { tag = "Some", arg = 42 }
+**Pretty printing**:
+```julia
+repr(nickel_eval_native("let x = 'None in x"))    # => "'None"
+repr(nickel_eval_native("let x = 'Some 42 in x")) # => "'Some 42"
 ```
+
+This mirrors Nickel's `std.enum.to_tag_and_arg` semantics while using a proper Julia type.
 
 ### Nested Structures
 

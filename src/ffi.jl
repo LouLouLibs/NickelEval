@@ -35,6 +35,7 @@ const TYPE_FLOAT  = 0x03
 const TYPE_STRING = 0x04
 const TYPE_ARRAY  = 0x05
 const TYPE_RECORD = 0x06
+const TYPE_ENUM   = 0x07
 
 # C struct for native buffer (must match Rust NativeBuffer)
 struct NativeBuffer
@@ -189,6 +190,13 @@ function _decode_value(io::IOBuffer)
             dict[key] = _decode_value(io)
         end
         return dict
+    elseif tag == TYPE_ENUM
+        # Format: tag_len (u32) | tag_bytes | has_arg (u8) | [arg_value]
+        tag_len = ltoh(read(io, UInt32))
+        tag_name = Symbol(String(read(io, tag_len)))
+        has_arg = read(io, UInt8) != 0x00
+        arg = has_arg ? _decode_value(io) : nothing
+        return NickelEnum(tag_name, arg)
     else
         error("Unknown type tag in binary protocol: $tag")
     end

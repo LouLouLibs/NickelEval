@@ -31,3 +31,10 @@ nickel_eval_native
 ```@docs
 @ncl_str
 ```
+
+## Types
+
+```@docs
+NickelEnum
+NickelError
+```
