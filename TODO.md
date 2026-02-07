@@ -33,10 +33,29 @@
 
 ## Next Steps
 
-### 1. Cross-Platform FFI Distribution
-Currently FFI requires local Rust build. Options:
-- **BinaryBuilder.jl** - Create `NickelEval_jll` for automatic binary distribution
-- Support Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows
+### 1. Cross-Platform FFI Distribution (In Progress)
+
+**Current approach: Self-hosted artifacts via GitHub Releases**
+
+Status:
+- [x] GitHub Actions workflow to build for all platforms (`.github/workflows/build-ffi.yml`)
+- [x] Artifacts.toml template for binary downloads
+- [x] Updated ffi.jl to use Pkg.Artifacts
+- [ ] Trigger first build by tagging v0.5.0
+- [ ] Update Artifacts.toml with actual SHA256 hashes
+- [ ] Test artifact downloads on all platforms
+
+Platforms:
+- Linux x86_64, aarch64
+- macOS x86_64, aarch64 (Apple Silicon)
+- Windows x86_64
+
+**Fallback option: Yggdrasil/BinaryBuilder.jl**
+
+If self-hosted artifacts become hard to maintain, submit to Yggdrasil:
+- Create `NickelEval_jll` package via BinaryBuilder.jl
+- Automatic builds and distribution via General registry
+- More complex setup but zero maintenance after
 
 ### 2. CI FFI Testing
 Update CI workflow to build Rust library and run FFI tests.

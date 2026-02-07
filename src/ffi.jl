@@ -11,6 +11,10 @@
 #   - No process spawn overhead
 #   - Direct memory sharing
 #   - Better performance for repeated evaluations
+#
+# Library loading:
+#   Currently requires local build. Future versions will include pre-built artifacts.
+#   See .github/workflows/build-ffi.yml for cross-platform build setup.
 
 # Determine platform-specific library name
 const LIB_NAME = if Sys.iswindows()
@@ -21,7 +25,7 @@ else
     "libnickel_jl.so"
 end
 
-# Path to the compiled library
+# Path to the compiled library (local deps/ folder)
 const LIB_PATH = joinpath(@__DIR__, "..", "deps", LIB_NAME)
 
 # Check if FFI library is available
@@ -252,7 +256,10 @@ end
 
 function _check_ffi_available()
     if !FFI_AVAILABLE
-        error("FFI not available. Build the Rust library with:\n" *
+        error("FFI library not available.\n\n" *
+              "The FFI functions require a pre-built native library.\n" *
+              "Use subprocess mode instead: nickel_eval() and nickel_eval_file()\n\n" *
+              "To build locally (requires Rust):\n" *
               "  cd rust/nickel-jl && cargo build --release\n" *
               "  mkdir -p deps && cp target/release/$LIB_NAME ../../deps/")
     end
