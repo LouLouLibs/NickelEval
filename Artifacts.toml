@@ -1,0 +1,47 @@
+# Pre-built FFI library binaries
+# Built by GitHub Actions: .github/workflows/build-ffi.yml
+# Release: https://github.com/LouLouLibs/NickelEval/releases/tag/v0.5.0
+
+# macOS Apple Silicon (aarch64)
+[[libnickel_jl]]
+arch = "aarch64"
+git-tree-sha1 = "650aae37b4208762e0f4d7134b7bf53cd2faa4a4"
+os = "macos"
+lazy = true
+
+    [[libnickel_jl.download]]
+    url = "https://github.com/LouLouLibs/NickelEval/releases/download/v0.5.0/libnickel_jl-aarch64-apple-darwin.tar.gz"
+    sha256 = "9f6f6fb4336221a10d7445caf5abad4980e71c92d55bfdbf7a402fbd76cddaa1"
+
+# macOS Intel (x86_64)
+[[libnickel_jl]]
+arch = "x86_64"
+git-tree-sha1 = "c16dc26899c353f310833867f8609076f136af76"
+os = "macos"
+lazy = true
+
+    [[libnickel_jl.download]]
+    url = "https://github.com/LouLouLibs/NickelEval/releases/download/v0.5.0/libnickel_jl-x86_64-apple-darwin.tar.gz"
+    sha256 = "e2a93fe247286efa553c2e5ce5d2cce01fc591741b3ae730c12f708f6dfc9857"
+
+# Linux x86_64
+[[libnickel_jl]]
+arch = "x86_64"
+git-tree-sha1 = "f5c565d2115df3f94ebb6e3cc964240630502826"
+os = "linux"
+lazy = true
+
+    [[libnickel_jl.download]]
+    url = "https://github.com/LouLouLibs/NickelEval/releases/download/v0.5.0/libnickel_jl-x86_64-linux-gnu.tar.gz"
+    sha256 = "2ca510ee4ac8df02ed04d510a00c8d986098fdc2a75af1bb6d3e7b16eff11aeb"
+
+# Windows x86_64
+[[libnickel_jl]]
+arch = "x86_64"
+git-tree-sha1 = "e412ae6fcf306a603a4ae17222f31746f2622045"
+os = "windows"
+lazy = true
+
+    [[libnickel_jl.download]]
+    url = "https://github.com/LouLouLibs/NickelEval/releases/download/v0.5.0/nickel_jl-x86_64-windows.tar.gz"
+    sha256 = "c1279f0b3fe202b366acf7a635f3c6da59704bab49470619e8f5d91267241fe7"

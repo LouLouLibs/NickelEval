@@ -11,10 +11,9 @@
 #   - No process spawn overhead
 #   - Direct memory sharing
 #   - Better performance for repeated evaluations
-#
-# Library loading:
-#   Currently requires local build. Future versions will include pre-built artifacts.
-#   See .github/workflows/build-ffi.yml for cross-platform build setup.
+
+using Artifacts
+using LazyArtifacts
 
 # Determine platform-specific library name
 const LIB_NAME = if Sys.iswindows()
@@ -25,11 +24,36 @@ else
     "libnickel_jl.so"
 end
 
-# Path to the compiled library (local deps/ folder)
-const LIB_PATH = joinpath(@__DIR__, "..", "deps", LIB_NAME)
+# Find library path: try artifact first, then local deps/
+function _find_library_path()
+    artifact_toml = joinpath(@__DIR__, "..", "Artifacts.toml")
+
+    # Try artifact (Julia auto-selects platform based on arch/os in Artifacts.toml)
+    if isfile(artifact_toml)
+        try
+            artifact_dir = @artifact_str("libnickel_jl", artifact_toml)
+            lib_path = joinpath(artifact_dir, LIB_NAME)
+            if isfile(lib_path)
+                return lib_path
+            end
+        catch e
+            # Artifact not available (lazy artifact not downloaded, or platform not supported)
+        end
+    end
+
+    # Fall back to local deps/ folder (for development)
+    local_path = joinpath(@__DIR__, "..", "deps", LIB_NAME)
+    if isfile(local_path)
+        return local_path
+    end
+
+    return nothing
+end
+
+const LIB_PATH = _find_library_path()
 
 # Check if FFI library is available
-const FFI_AVAILABLE = isfile(LIB_PATH)
+const FFI_AVAILABLE = LIB_PATH !== nothing
 
 # Binary protocol type tags (must match Rust definitions)
 const TYPE_NULL   = 0x00
