@@ -3,8 +3,6 @@
 # This script is run by Pkg.build() to compile the Rust wrapper library.
 # Currently a stub for Phase 2 implementation.
 
-using Libdl
-
 const RUST_PROJECT = joinpath(@__DIR__, "..", "rust", "nickel-jl")
 
 # Determine the correct library extension for the platform
