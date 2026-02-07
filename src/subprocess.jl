@@ -134,6 +134,10 @@ julia> nickel_eval("{ x = 1.5, y = 2.5 }", @NamedTuple{x::Float64, y::Float64})
 """
 function nickel_eval(code::String, ::Type{T}) where T
     json_str = nickel_export(code; format=:json)
+    if !hasmethod(JSON.parse, Tuple{String, Type})
+        error("Typed parsing requires JSON.jl >= 1.0. " *
+              "Either upgrade JSON.jl or use nickel_eval_native() which doesn't require JSON.")
+    end
     return JSON.parse(json_str, T)
 end
 
@@ -185,6 +189,10 @@ end
 
 function nickel_eval_file(path::String, ::Type{T}) where T
     json_str = _eval_file_to_json(path)
+    if !hasmethod(JSON.parse, Tuple{String, Type})
+        error("Typed parsing requires JSON.jl >= 1.0. " *
+              "Either upgrade JSON.jl or use nickel_eval_file_native() which doesn't require JSON.")
+    end
     return JSON.parse(json_str, T)
 end
 

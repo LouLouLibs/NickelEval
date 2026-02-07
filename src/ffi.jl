@@ -82,6 +82,10 @@ end
 
 function nickel_eval_ffi(code::String, ::Type{T}) where T
     result_json = _eval_ffi_to_json(code)
+    if !hasmethod(JSON.parse, Tuple{String, Type})
+        error("Typed parsing requires JSON.jl >= 1.0. " *
+              "Either upgrade JSON.jl or use nickel_eval_native() which doesn't require JSON.")
+    end
     return JSON.parse(result_json, T)
 end
 
